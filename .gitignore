@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+build/
+dist/
+.svelte-kit/
+
+# Tauri build outputs
+src-tauri/target/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Firmware binaries (contain device credentials)
+src-tauri/resources/flasher/AWS/*.bin
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Lock files (optional - uncomment if you want to ignore)
+# package-lock.json
