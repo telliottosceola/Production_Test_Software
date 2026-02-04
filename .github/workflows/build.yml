@@ -3,6 +3,8 @@ name: Build Tauri App
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'  # Trigger on version tags like v0.1.0, v1.0.0, etc.
   pull_request:
     branches: [main]
   workflow_dispatch:  # Allow manual trigger
@@ -47,9 +49,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: ${{ matrix.args }}
+          # Create release when triggered by a tag
+          tagName: ${{ github.ref_name }}
+          releaseName: 'NCD Sensor Programmer ${{ github.ref_name }}'
+          releaseBody: |
+            ## NCD Sensor Programmer ${{ github.ref_name }}
+            
+            ### Downloads
+            - **Windows**: Download the `.msi` or `.exe` installer
+            - **macOS**: Download the `.dmg` file
+            
+            ### Installation
+            1. Download the appropriate installer for your operating system
+            2. Run the installer
+            3. Launch "NCD Sensor Programmer" from your applications
+            
+            ### Requirements
+            - Python 3.x must be installed for the flasher functionality
+            - Internet connection required to download firmware files
+          releaseDraft: false
+          prerelease: false
 
+      # Upload artifacts for non-tag builds (for testing)
       - name: Upload artifacts (Windows)
-        if: matrix.platform == 'windows-latest'
+        if: matrix.platform == 'windows-latest' && !startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer
@@ -60,7 +83,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload artifacts (macOS)
-        if: matrix.platform == 'macos-latest'
+        if: matrix.platform == 'macos-latest' && !startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: macos-installer
