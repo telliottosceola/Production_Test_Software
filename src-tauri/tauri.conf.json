@@ -36,7 +36,6 @@
     ],
     "resources": {
       "resources/flasher/*": "flasher/",
-      "resources/flasher/AWS/*": "flasher/AWS/",
       "resources/flasher/esptool/*": "flasher/esptool/",
       "resources/flasher/esptool/targets/*": "flasher/esptool/targets/",
       "resources/flasher/esptool/targets/stub_flasher/*": "flasher/esptool/targets/stub_flasher/"
