@@ -537,15 +537,13 @@ try:
             partitions_file = urllib.request.urlretrieve(str(firmware.get('partitions')), partitions_path)
             print('[PROGRESS] Partitions downloaded')
 
-            # Copy boot_app0.bin from AWS directory (standard ESP32 file needed for flashing)
-            __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
-            aws_boot_app0 = os.path.join(__location__, 'AWS', 'boot_app0.bin')
+            # Download boot_app0.bin from S3 (standard ESP32 file needed for flashing)
+            print('[PROGRESS] Downloading boot_app0.bin...')
+            sys.stdout.flush()
             boot_app0_path = os.path.join(temp_dir, 'boot_app0.bin')
-            if os.path.exists(aws_boot_app0):
-                shutil.copy2(aws_boot_app0, boot_app0_path)
-                print('[PROGRESS] Copied boot_app0.bin')
-            else:
-                print(f'Warning: boot_app0.bin not found in AWS directory: {aws_boot_app0}')
+            boot_app0_url = 'https://ncd-esp32.s3.amazonaws.com/ESP32_V2_Sensor_Temperature_Humidity/boot_app0.bin'
+            urllib.request.urlretrieve(boot_app0_url, boot_app0_path)
+            print('[PROGRESS] boot_app0.bin downloaded')
 
             print('')
             print('[PROGRESS] Starting upload to device...')
