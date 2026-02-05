@@ -1,6 +1,6 @@
 [package]
 name = "sensor-programmer"
-version = "0.1.3"
+version = "0.1.4"
 description = "NCD Sensor Programmer - Flash, test, and configure ESP32 sensors"
 authors = ["NCD"]
 license = "MIT"
