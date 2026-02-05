@@ -9,6 +9,7 @@ import subprocess
 import threading
 import glob
 import shutil
+import tempfile
 
 import esptool
 
@@ -430,12 +431,20 @@ firmware_choices_dev = {
 }
 
 status_code = 1  # default to failure; set to 0 on success
+
+# Create a temporary directory for downloads (works on Windows where install dir is read-only)
+temp_dir = tempfile.mkdtemp(prefix='ncd_flasher_')
+print(f'[PROGRESS] Using temp directory: {temp_dir}')
+
 try:
     if sota:
-        firmware_file = urllib.request.urlretrieve('https://ncd-esp32.s3.amazonaws.com/SOTA_Relay/firmware.bin', './firmware.bin')
-        partitions_file = urllib.request.urlretrieve('https://ncd-esp32.s3.amazonaws.com/SOTA_Relay/partitions.bin', './partitions.bin')
-        bootloader_file = urllib.request.urlretrieve('https://ncd-esp32.s3.amazonaws.com/SOTA_Relay/bootloader.bin', './bootloader.bin')
-        espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '921600', '--before', 'default_reset', '--after', 'hard_reset', 'write_flash', '-z', '--flash_mode', 'dio', '--flash_freq', '40m', '--flash_size', 'detect', '0x1000', 'bootloader.bin', '0x8000', 'partitions.bin', '0x10000', 'firmware.bin'])
+        firmware_path = os.path.join(temp_dir, 'firmware.bin')
+        partitions_path = os.path.join(temp_dir, 'partitions.bin')
+        bootloader_path = os.path.join(temp_dir, 'bootloader.bin')
+        firmware_file = urllib.request.urlretrieve('https://ncd-esp32.s3.amazonaws.com/SOTA_Relay/firmware.bin', firmware_path)
+        partitions_file = urllib.request.urlretrieve('https://ncd-esp32.s3.amazonaws.com/SOTA_Relay/partitions.bin', partitions_path)
+        bootloader_file = urllib.request.urlretrieve('https://ncd-esp32.s3.amazonaws.com/SOTA_Relay/bootloader.bin', bootloader_path)
+        espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '921600', '--before', 'default_reset', '--after', 'hard_reset', 'write_flash', '-z', '--flash_mode', 'dio', '--flash_freq', '40m', '--flash_size', 'detect', '0x1000', bootloader_path, '0x8000', partitions_path, '0x10000', firmware_path])
         status_code = 0
         raise SystemExit(0)
 
@@ -490,48 +499,50 @@ try:
             raise SystemExit(1)
         
         print(f'Found local firmware files in: {aws_dir}')
-        # Copy files from AWS directory to current directory for flashing
-        import shutil
+        # Copy files from AWS directory to temp directory for flashing
         for name, src_path in local_files.items():
-            dest_path = os.path.join(__location__, f'{name}.bin')
+            dest_path = os.path.join(temp_dir, f'{name}.bin')
             shutil.copy2(src_path, dest_path)
             print(f'Copied {name}.bin from AWS directory')
 
     if firmware_choice != '22' and firmware_choice != '1':
         print('[PROGRESS] Downloading firmware...')
         sys.stdout.flush()
-        firmware_file = urllib.request.urlretrieve(str(firmware.get('firmware')), './firmware.bin')
+        firmware_path = os.path.join(temp_dir, 'firmware.bin')
+        firmware_file = urllib.request.urlretrieve(str(firmware.get('firmware')), firmware_path)
         print('[PROGRESS] Firmware downloaded')
 
         if spiffs:
-            spiffs_dest = os.path.join(os.getcwd(), 'spiffs.bin')
+            spiffs_path = os.path.join(temp_dir, 'spiffs.bin')
             if cli_spiffs_project_dir:
                 print('[PROGRESS] Building SPIFFS from project...')
                 sys.stdout.flush()
-                build_spiffs_from_project(cli_spiffs_project_dir, spiffs_dest)
+                build_spiffs_from_project(cli_spiffs_project_dir, spiffs_path)
                 print('[PROGRESS] SPIFFS built')
             else:
                 print('[PROGRESS] Downloading SPIFFS...')
                 sys.stdout.flush()
-                spiffs_file = urllib.request.urlretrieve(str(firmware.get('spiffs')), spiffs_dest)
+                spiffs_file = urllib.request.urlretrieve(str(firmware.get('spiffs')), spiffs_path)
                 print('[PROGRESS] SPIFFS downloaded')
 
             print('[PROGRESS] Downloading bootloader...')
             sys.stdout.flush()
-            bootloader_file = urllib.request.urlretrieve(str(firmware.get('bootloader')), './bootloader.bin')
+            bootloader_path = os.path.join(temp_dir, 'bootloader.bin')
+            bootloader_file = urllib.request.urlretrieve(str(firmware.get('bootloader')), bootloader_path)
             print('[PROGRESS] Bootloader downloaded')
 
             print('[PROGRESS] Downloading partitions...')
             sys.stdout.flush()
-            partitions_file = urllib.request.urlretrieve(str(firmware.get('partitions')), './partitions.bin')
+            partitions_path = os.path.join(temp_dir, 'partitions.bin')
+            partitions_file = urllib.request.urlretrieve(str(firmware.get('partitions')), partitions_path)
             print('[PROGRESS] Partitions downloaded')
 
             # Copy boot_app0.bin from AWS directory (standard ESP32 file needed for flashing)
             __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
             aws_boot_app0 = os.path.join(__location__, 'AWS', 'boot_app0.bin')
+            boot_app0_path = os.path.join(temp_dir, 'boot_app0.bin')
             if os.path.exists(aws_boot_app0):
-                import shutil
-                shutil.copy2(aws_boot_app0, './boot_app0.bin')
+                shutil.copy2(aws_boot_app0, boot_app0_path)
                 print('[PROGRESS] Copied boot_app0.bin')
             else:
                 print(f'Warning: boot_app0.bin not found in AWS directory: {aws_boot_app0}')
@@ -540,20 +551,27 @@ try:
             print('[PROGRESS] Starting upload to device...')
             sys.stdout.flush()
 
+    # Build paths for esptool (use temp_dir for all files)
+    firmware_bin = os.path.join(temp_dir, 'firmware.bin')
+    bootloader_bin = os.path.join(temp_dir, 'bootloader.bin')
+    partitions_bin = os.path.join(temp_dir, 'partitions.bin')
+    boot_app0_bin = os.path.join(temp_dir, 'boot_app0.bin')
+    spiffs_bin = os.path.join(temp_dir, 'spiffs.bin')
+
     if firmware_choice == '1':
-        espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '460800', '--before', 'default_reset', '--after', 'hard_reset', 'write_flash', '-z', '--flash_mode', 'dio', '--flash_freq', '80m', '--flash_size', '4MB', '0x1000', 'bootloader.bin', '0x8000', 'partitions.bin', '0xe000', 'boot_app0.bin', '0x10000', 'firmware.bin'])
-        espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '460800', 'write_flash', '0x290000', 'spiffs.bin'])
+        espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '460800', '--before', 'default_reset', '--after', 'hard_reset', 'write_flash', '-z', '--flash_mode', 'dio', '--flash_freq', '80m', '--flash_size', '4MB', '0x1000', bootloader_bin, '0x8000', partitions_bin, '0xe000', boot_app0_bin, '0x10000', firmware_bin])
+        espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '460800', 'write_flash', '0x290000', spiffs_bin])
     else:
         if spiffs:
             # Only 5 and 14 use custom layout (spiffs at 0x383000). Others use default: spiffs at 0x290000.
             if firmware_choice in ('5', '14'):
-                espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '921600', '--before', 'default_reset', '--after', 'hard_reset', 'write_flash', '-z', '--flash_mode', 'dio', '--flash_freq', '40m', '--flash_size', 'detect', '0x1000', 'bootloader.bin', '0x8000', 'partitions.bin', '0x00383000', 'spiffs.bin', '0x10000', 'firmware.bin'])
+                espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '921600', '--before', 'default_reset', '--after', 'hard_reset', 'write_flash', '-z', '--flash_mode', 'dio', '--flash_freq', '40m', '--flash_size', 'detect', '0x1000', bootloader_bin, '0x8000', partitions_bin, '0x00383000', spiffs_bin, '0x10000', firmware_bin])
             else:
                 # Flash all required files: bootloader, partitions, boot_app0, firmware, and spiffs
-                espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '460800', '--before', 'default_reset', '--after', 'hard_reset', 'write_flash', '-z', '--flash_mode', 'dio', '--flash_freq', '80m', '--flash_size', '4MB', '0x1000', 'bootloader.bin', '0x8000', 'partitions.bin', '0xe000', 'boot_app0.bin', '0x10000', 'firmware.bin', '0x290000', 'spiffs.bin'])
+                espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '460800', '--before', 'default_reset', '--after', 'hard_reset', 'write_flash', '-z', '--flash_mode', 'dio', '--flash_freq', '80m', '--flash_size', '4MB', '0x1000', bootloader_bin, '0x8000', partitions_bin, '0xe000', boot_app0_bin, '0x10000', firmware_bin, '0x290000', spiffs_bin])
         else:
             print('no spiffs')
-            espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '921600', '--before', 'default_reset', '--after', 'hard_reset', 'write_flash', '-z', '--flash_mode', 'dio', '--flash_freq', '40m', '--flash_size', 'detect', '0x1000', 'bootloader.bin', '0x10000', 'firmware.bin'])
+            espmodule = esptool.main(['--chip', 'esp32', '--port', target_port, '--baud', '921600', '--before', 'default_reset', '--after', 'hard_reset', 'write_flash', '-z', '--flash_mode', 'dio', '--flash_freq', '40m', '--flash_size', 'detect', '0x1000', bootloader_bin, '0x10000', firmware_bin])
 except SystemExit as e:
     status_code = e.code if e.code is not None else 1
 except Exception as e:
@@ -562,6 +580,13 @@ except Exception as e:
     status_code = 1
 else:
     status_code = 0
+finally:
+    # Clean up temp directory
+    try:
+        shutil.rmtree(temp_dir)
+        print(f'[PROGRESS] Cleaned up temp directory')
+    except Exception as cleanup_error:
+        print(f'Warning: Could not clean up temp directory: {cleanup_error}')
 
 if status_code == 0:
     print('Status: Success')
