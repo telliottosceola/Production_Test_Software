@@ -5,6 +5,15 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
+/// Returns the appropriate Python command for the current platform
+fn python_command() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "python"
+    } else {
+        "python3"
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SerialPortInfo {
     pub name: String,
@@ -109,7 +118,7 @@ pub async fn flash_firmware(app_handle: AppHandle, port: String, firmware_id: u3
     // Run the blocking operation in a separate thread
     let handle = app_handle.clone();
     let result = tokio::task::spawn_blocking(move || {
-        let mut child = Command::new("python3")
+        let mut child = Command::new(python_command())
             .arg(&script_path)
             .arg("--port")
             .arg(&port)
@@ -388,7 +397,7 @@ pub async fn erase_device(app_handle: AppHandle, port: String) -> Result<ResetRe
         let _ = handle.emit("erase-output", "Starting flash erase...");
         
         // Using esptool v4.5.1 which has improved reset timing
-        let mut child = Command::new("python3")
+        let mut child = Command::new(python_command())
             .arg(&esptool_path)
             .arg("--chip")
             .arg("esp32")
